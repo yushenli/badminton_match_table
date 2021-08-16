@@ -48,7 +48,7 @@ func TestClusterByScores(t *testing.T) {
 					Score: -8.0,
 				},
 			},
-			[]float32{-8.0, 4.0},
+			[]float32{2.0, -8.0},
 		},
 		{
 			"4PlayersSomeSame",
@@ -70,7 +70,7 @@ func TestClusterByScores(t *testing.T) {
 					Score: 2.0,
 				},
 			},
-			[]float32{2.0, 3.0, 4.0},
+			[]float32{4.0, 3.0, 2.0},
 		},
 		{
 			"8PlayersBandSizeGreaterThan1",
@@ -108,7 +108,7 @@ func TestClusterByScores(t *testing.T) {
 					Score: 8,
 				},
 			},
-			[]float32{2.1, 5.0, 6.2, 8.0},
+			[]float32{8.0, 6.0, 5.0, 1.0},
 		},
 	}
 

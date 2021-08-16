@@ -45,20 +45,19 @@ func clusterByScores(players model.PlayerSlice) []float32 {
 	clusters := clustering.NewDistanceMapClusterSet(distanceMap)
 	clustering.Cluster(clusters, clustering.Threshold(maxDistance), clustering.CompleteLinkage())
 
-	upperBonds := make([]float32, clusters.Count())
+	lowerBonds := make([]float32, clusters.Count())
 	clusters.EachCluster(-1, func(cluster int) {
-		max := float32(-math.MaxFloat32)
+		min := float32(math.MaxFloat32)
 		clusters.EachItem(cluster, func(x clustering.ClusterItem) {
-			if x.(*model.Player).Score > max {
-				max = x.(*model.Player).Score
+			if x.(*model.Player).Score < min {
+				min = x.(*model.Player).Score
 			}
-			//log.Println(cluster, x)
 		})
-		upperBonds[cluster] = max
+		lowerBonds[cluster] = min
 	})
-	sort.Slice(upperBonds, func(i, j int) bool { return upperBonds[i] < upperBonds[j] })
+	sort.Slice(lowerBonds, func(i, j int) bool { return lowerBonds[i] > lowerBonds[j] })
 
-	return upperBonds
+	return lowerBonds
 }
 
 // SeparateCompetedPlayersWithinBands scans a given sorted player list and break them into bands.
