@@ -1,6 +1,7 @@
 package arranger
 
 import (
+	"log"
 	"math"
 	"sort"
 
@@ -60,6 +61,65 @@ func clusterByScores(players model.PlayerSlice) []float32 {
 	return lowerBonds
 }
 
+type separateRange struct {
+	left     int
+	right    int
+	endFixed bool
+}
+
+func findSeparateRanges(players model.PlayerSlice, clusters []float32) []separateRange {
+	var ranges []separateRange
+	if len(players) == 0 {
+		return ranges
+	}
+
+	// Find the cluster that the first player's score belongs to.
+	clusterIdx := 0
+	for ; clusters[clusterIdx] > players[0].Score; clusterIdx++ {
+	}
+
+	i := 0
+	j := 1
+	for j <= len(players) {
+		if j < len(players) && players[j].Score >= clusters[clusterIdx] {
+			// This means the scores from player i to j are still in the same band.
+			j++
+			continue
+		}
+
+		if (j-1)/2 > i/2 {
+			// Player j-1 is the last player in the same band as player i
+			// Here we check if player i and j-1 belong to the same 2-sized pair,
+			// if so, there is no need to rearrange them.
+
+			// For the ranges to be rearranged, always start with an even number-th player
+			// and end with an odd number-th player. If the end of the range is on an even
+			// indexed player, do the separation process including the very next element in the
+			// next band, but set endFixed so that that player won't be moved.
+			var r separateRange
+			if i%2 == 0 {
+				r.left = i
+			} else {
+				r.left = i - 1
+			}
+			if (j-1)%2 == 1 {
+				r.right = j - 1
+				r.endFixed = false
+			} else {
+				r.right = j
+				r.endFixed = true
+			}
+			ranges = append(ranges, r)
+		}
+
+		i = j
+		j++
+		clusterIdx++
+	}
+
+	return ranges
+}
+
 // SeparateCompetedPlayersWithinBands scans a given sorted player list and break them into bands.
 // For each band, it will call SeparateCompetedPlayers to rearrange (in place) the players within the band,
 // so that people with similar scores will be shuffled in a way that everyone will play with an opponent
@@ -69,6 +129,14 @@ func clusterByScores(players model.PlayerSlice) []float32 {
 // within clusters is the difference between the highest score and lowest score divided by
 // Max(6, Player Count / 2), or 0.5, whichever is bigger.
 func SeparateCompetedPlayersWithinBands(allPlayers, playingPlayers model.PlayerSlice) error {
+	clusters := clusterByScores(allPlayers)
+	ranges := findSeparateRanges(playingPlayers, clusters)
+	for _, r := range ranges {
+		err := SeparateCompetedPlayers(playingPlayers, r.left, r.right, r.endFixed)
+		if err != nil {
+			log.Printf("Failed to separate competed players within bands among allPlayers %v and playingPlayers %v : %v", allPlayers, playingPlayers, err)
+		}
+	}
 
 	return nil
 }
