@@ -6,7 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Event represents a record in the match table.
+// Event represents a record in the event table.
 type Event struct {
 	gorm.Model
 	Date     time.Time

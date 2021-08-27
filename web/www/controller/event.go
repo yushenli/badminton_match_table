@@ -19,13 +19,45 @@ type playerWithCounter struct {
 	Score float32
 }
 
-func fillPlayerCounter(eid int, playerMap map[int]*playerWithCounter) error {
-	var sides []gormmodel.Side
-	ret := config.DB.Where("eid = ?", eid).Find(&sides)
+func populatePlayers(eid int) ([]playerWithCounter, map[int]*playerWithCounter, error) {
+	var players []playerWithCounter
+	playerMap := make(map[int]*playerWithCounter)
+	ret := config.DB.Where("eid = ?", eid).Find(&players)
 	if ret.Error != nil {
-		return ret.Error
+		log.Printf("Failed to list players under event %d: %v", eid, ret.Error)
+		return nil, nil, ret.Error
+	}
+	for idx := range players {
+		playerMap[int(players[idx].ID)] = &(players[idx])
+		players[idx].Score = players[idx].InitialScore
 	}
 
+	return players, playerMap, nil
+}
+
+func populateSides(eid int, playerMap map[int]*playerWithCounter) ([]gormmodel.Side, map[int]*gormmodel.Side, error) {
+	var sides []gormmodel.Side
+	sideMap := make(map[int]*gormmodel.Side)
+	ret := config.DB.Where("eid = ?", eid).Find(&sides)
+	if ret.Error != nil {
+		log.Printf("Failed to list sides under event %d: %v", eid, ret.Error)
+		return nil, nil, ret.Error
+	}
+	for idx := range sides {
+		sideMap[int(sides[idx].ID)] = &(sides[idx])
+		sides[idx].Player1 = &playerMap[sides[idx].Pid1].Player
+		if sides[idx].Pid2 == nil {
+			continue
+		}
+		if _, ok := playerMap[*sides[idx].Pid2]; ok {
+			sides[idx].Player2 = &playerMap[*sides[idx].Pid2].Player
+		}
+	}
+
+	return sides, sideMap, nil
+}
+
+func fillPlayerCounter(playerMap map[int]*playerWithCounter, sides []gormmodel.Side) {
 	for _, side := range sides {
 		player, ok := playerMap[side.Pid1]
 		if ok {
@@ -56,8 +88,6 @@ func fillPlayerCounter(eid int, playerMap map[int]*playerWithCounter) error {
 			}
 		}
 	}
-
-	return nil
 }
 
 func sortPlayerSlice(players []playerWithCounter) {
@@ -95,32 +125,26 @@ func RenderEvent(ctx *gin.Context) {
 		return
 	}
 
-	var players []playerWithCounter
-	playerMap := make(map[int]*playerWithCounter)
-	ret = config.DB.Where("eid = ?", event.ID).Find(&players)
-	if ret.Error != nil {
-		log.Printf("Failed to list players under event %d: %v", event.ID, ret.Error)
+	// Fill the Players section
+	players, playerMap, err := populatePlayers(int(event.ID))
+	if err != nil {
 		RenderError(ctx, http.StatusInternalServerError,
 			fmt.Sprintf("Failed to list players under event %d", event.ID))
 		return
 	}
-	for idx, _ := range players {
-		playerMap[int(players[idx].ID)] = &(players[idx])
-		players[idx].Score = players[idx].InitialScore
-	}
 
-	err := fillPlayerCounter(int(event.ID), playerMap)
-	if err != nil {
-		log.Printf("Failed to fill player score and counters for event %d: %v", event.ID, ret.Error)
+	sides, _, err := populateSides(int(event.ID), playerMap)
+	if ret.Error != nil {
 		RenderError(ctx, http.StatusInternalServerError,
-			fmt.Sprintf("Failed to fill player score and counters for event %d", event.ID))
+			fmt.Sprintf("Failed to list sides under event %d", event.ID))
 		return
 	}
 
+	fillPlayerCounter(playerMap, sides)
 	sortPlayerSlice(players)
 
 	ctx.HTML(http.StatusOK, "event.html", gin.H{
-		"eventsKey": eventKey,
-		"players":   players,
+		"eventKey": eventKey,
+		"players":  players,
 	})
 }
