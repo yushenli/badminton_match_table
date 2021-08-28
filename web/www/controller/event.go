@@ -196,7 +196,7 @@ func RenderEvent(ctx *gin.Context) {
 	}
 	sortPlayerSlice(sortedPlayers)
 
-	// Fill the current round match table and results section
+	// Fill the current round match table and match results
 	_, matchesByRound, err := populateMatches(int(event.ID), event.CurrentRound, sideMap)
 	matchTableColumnWidth := "100%"
 	if len(matchesByRound[event.CurrentRound-1]) > 0 {
@@ -209,6 +209,7 @@ func RenderEvent(ctx *gin.Context) {
 		"event":                 event,
 		"players":               sortedPlayers,
 		"currentMatches":        matchesByRound[event.CurrentRound-1],
+		"matchesByRound":        matchesByRound,
 		"matchTableColumnWidth": matchTableColumnWidth,
 		"unscheduledPlayers":    unscheduledPlayers,
 	})
