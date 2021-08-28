@@ -9,6 +9,8 @@ import (
 // RegisterFormatters registers all the defined formatters into the given router.
 func RegisterFormatters(router *gin.Engine) {
 	router.SetFuncMap(template.FuncMap{
-		"asDashedDate": AsDashedDate,
+		"asDashedDate":              AsDashedDate,
+		"sideInMatchTable":          SideInMatchTable,
+		"commaSeparatedPlayerNames": CommaSeparatedPlayerNames,
 	})
 }
