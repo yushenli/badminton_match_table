@@ -61,3 +61,51 @@ func ChangeMatchStatus(ctx *gin.Context) {
 			fmt.Sprintf("Failed to update the match by mid %d to status %s: %v", mid, sideStr, ret.Error))
 	}
 }
+
+// ChangeBreakStatus handles the reuqest to change whether a player is in a break.
+func ChangeBreakStatus(ctx *gin.Context) {
+	pidStr := ctx.Query("pid")
+	inBreakStr := ctx.Query("in_break")
+	if pidStr == "" || inBreakStr == "" {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("You must provide pid and is_break parameters: %s", ctx.Request.URL.String()))
+		return
+	}
+
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("Invalid pid provided: %q", pidStr))
+		return
+	}
+	if inBreakStr != "1" && inBreakStr != "0" {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("Invalid in_break provided: %q", inBreakStr))
+		return
+	}
+
+	log.Println(fmt.Sprintf("ChangeBreakStatus called: pid=%d, in_break=%s", pid, inBreakStr))
+
+	if config.DB == nil {
+		RenderError(ctx, http.StatusInternalServerError, "Unable to connect to database. Please contact the admin.")
+		return
+	}
+
+	var player gormmodel.Player
+	ret := config.DB.First(&player, pid)
+	if ret.Error != nil {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("Failed to locate the player by pid %d: %v", pid, ret.Error))
+	}
+
+	if inBreakStr == "1" {
+		player.InBreak = true
+	} else {
+		player.InBreak = false
+	}
+	ret = config.DB.Save(&player)
+	if ret.Error != nil {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("Failed to update the player by pid %d: %v", pid, ret.Error))
+	}
+}
