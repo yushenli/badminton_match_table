@@ -28,6 +28,7 @@ func setupRouter() *gin.Engine {
 	r.GET("/event/:key", controller.RenderEvent)
 	r.GET("/admin/change_match_status", controller.ChangeMatchStatus)
 	r.GET("/admin/change_break_status", controller.ChangeBreakStatus)
+	r.GET("/admin/complete_round", controller.CompleteRound)
 
 	staticFiles := []string{}
 	for _, staticFile := range staticFiles {

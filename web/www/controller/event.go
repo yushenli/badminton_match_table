@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yushenli/badminton_match_table/web/lib/config"
@@ -157,7 +158,6 @@ func findUnscheduledPlayers(matches []*gormmodel.Match, players []playerWithCoun
 			scheduled[*match.Side2.Pid2] = true
 		}
 	}
-	log.Printf("%+v", scheduled)
 
 	var unscheduled []*gormmodel.Player
 	for idx, player := range players {
@@ -214,14 +214,23 @@ func RenderEvent(ctx *gin.Context) {
 	// Fill the current round match table and match results
 	_, matchesByRound, err := populateMatches(int(event.ID), event.CurrentRound, sideMap)
 
-	unscheduledPlayers := findUnscheduledPlayers(matchesByRound[event.CurrentRound-1], players)
+	round := event.CurrentRound
+	if ctx.Query("round") != "" {
+		round1, err := strconv.Atoi(ctx.Query("round"))
+		if err == nil {
+			round = round1
+		}
+	}
+
+	unscheduledPlayers := findUnscheduledPlayers(matchesByRound[round-1], players)
 
 	ctx.HTML(http.StatusOK, "event.html", gin.H{
 		"event":              event,
 		"players":            sortedPlayers,
-		"currentMatches":     matchesByRound[event.CurrentRound-1],
+		"displayRound":       round,
+		"currentMatches":     matchesByRound[round-1],
 		"matchesByRound":     matchesByRound,
-		"matchTableColStyle": matchTableColStyle(len(matchesByRound[event.CurrentRound-1])),
+		"matchTableColStyle": matchTableColStyle(len(matchesByRound[round-1])),
 		"unscheduledPlayers": unscheduledPlayers,
 	})
 }
