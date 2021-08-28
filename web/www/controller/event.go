@@ -19,6 +19,21 @@ type playerWithCounter struct {
 	Score float32
 }
 
+// matchTableColStyle returns the css style for the match table columns so that
+// the width adapts the number of courts.
+func matchTableColStyle(courts int) string {
+	if courts == 1 {
+		return "w-col-12" // width: 100%
+	}
+	if courts == 2 {
+		return "w-col-6" // width: 50%
+	}
+	if courts == 3 {
+		return "w-col-4" // width: 33%
+	}
+	return "w-col-3" // width: 25%
+}
+
 func populatePlayers(eid int) ([]playerWithCounter, map[int]*playerWithCounter, error) {
 	var players []playerWithCounter
 	playerMap := make(map[int]*playerWithCounter)
@@ -198,19 +213,15 @@ func RenderEvent(ctx *gin.Context) {
 
 	// Fill the current round match table and match results
 	_, matchesByRound, err := populateMatches(int(event.ID), event.CurrentRound, sideMap)
-	matchTableColumnWidth := "100%"
-	if len(matchesByRound[event.CurrentRound-1]) > 0 {
-		matchTableColumnWidth = fmt.Sprintf("%d%%", 100/len(matchesByRound[event.CurrentRound-1]))
-	}
 
 	unscheduledPlayers := findUnscheduledPlayers(matchesByRound[event.CurrentRound-1], players)
 
 	ctx.HTML(http.StatusOK, "event.html", gin.H{
-		"event":                 event,
-		"players":               sortedPlayers,
-		"currentMatches":        matchesByRound[event.CurrentRound-1],
-		"matchesByRound":        matchesByRound,
-		"matchTableColumnWidth": matchTableColumnWidth,
-		"unscheduledPlayers":    unscheduledPlayers,
+		"event":              event,
+		"players":            sortedPlayers,
+		"currentMatches":     matchesByRound[event.CurrentRound-1],
+		"matchesByRound":     matchesByRound,
+		"matchTableColStyle": matchTableColStyle(len(matchesByRound[event.CurrentRound-1])),
+		"unscheduledPlayers": unscheduledPlayers,
 	})
 }
