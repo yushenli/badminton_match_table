@@ -3,6 +3,7 @@ package model
 // Player represents a player, with it's necessary information to be arranged.
 type Player struct {
 	Priority  float32
+	ID        int
 	Name      string
 	Score     float32
 	Matches   float32

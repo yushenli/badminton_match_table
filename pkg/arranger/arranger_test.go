@@ -42,7 +42,7 @@ func TestSortPlayerSliceByScorePriority(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.title, func(t *testing.T) {
-			sortPlayerSliceByScorePriority(tc.slice)
+			SortPlayerSliceByScorePriority(tc.slice)
 			if len(tc.expected) != len(tc.slice) {
 				t.Errorf("Unpected length of the sorted PlayerSlice, expected %v, got %v",
 					len(tc.expected),

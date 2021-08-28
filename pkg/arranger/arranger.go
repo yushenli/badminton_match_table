@@ -8,7 +8,9 @@ import (
 	"github.com/yushenli/badminton_match_table/pkg/model"
 )
 
-func sortPlayerSliceByScorePriority(slice model.PlayerSlice) {
+// SortPlayerSliceByScorePriority sorts a PlayerSlice and put players with high scores on the left,
+// with ties, ones with higher priority will be put on the left.
+func SortPlayerSliceByScorePriority(slice model.PlayerSlice) {
 	sort.Slice(slice, func(i, j int) bool {
 		a := slice[i]
 		b := slice[j]

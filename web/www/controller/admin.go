@@ -8,8 +8,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yushenli/badminton_match_table/pkg/arranger"
 	"github.com/yushenli/badminton_match_table/web/lib/config"
 	"github.com/yushenli/badminton_match_table/web/lib/gormmodel"
+	"github.com/yushenli/badminton_match_table/web/lib/util"
 	"gorm.io/gorm"
 )
 
@@ -222,4 +224,166 @@ func CompleteRound(ctx *gin.Context) {
 	// The output must wait until no error will be thrown, since errors are thrown
 	// under different HTTP status codes.
 	ctx.Writer.WriteString(output.String())
+}
+
+// ScheduleCurrentRound generates a new match table for the current round.
+// Existing match tables for the same round will be deleted without asking.
+func ScheduleCurrentRound(ctx *gin.Context) {
+	eidStr := ctx.Query("eid")
+	if eidStr == "" {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("You must provide the eid parameter: %s", ctx.Request.URL.String()))
+		return
+	}
+
+	eid, err := strconv.Atoi(eidStr)
+	if err != nil {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("Invalid eid provided: %q", eidStr))
+		return
+	}
+
+	if config.DB == nil {
+		RenderError(ctx, http.StatusInternalServerError, "Unable to connect to database. Please contact the admin.")
+		return
+	}
+
+	var event gormmodel.Event
+	ret := config.DB.First(&event, eid)
+	if ret.Error != nil {
+		RenderError(ctx, http.StatusInternalServerError,
+			fmt.Sprintf("Failed to locate the event by eid %d: %v", eid, ret.Error))
+	}
+
+	players, playerMap, err := util.PopulatePlayers(eid)
+	if err != nil {
+		RenderError(ctx, http.StatusInternalServerError,
+			fmt.Sprintf("Failed to list players under event %d", eid))
+		return
+	}
+
+	sides, _, err := util.PopulateSides(int(event.ID), playerMap)
+	if ret.Error != nil {
+		RenderError(ctx, http.StatusInternalServerError,
+			fmt.Sprintf("Failed to list sides under event %d", eid))
+		return
+	}
+
+	util.FillPlayerCounter(playerMap, sides)
+
+	activePlayers := util.FilterActivePlayers(players)
+	allArrangerPlayers := util.ToArrangerPlayersP(players)
+	activeArrangerPlayers := util.ToArrangerPlayers(activePlayers)
+	util.FillArrangerPlayersOpponents(activeArrangerPlayers, sides)
+
+	ctx.Writer.WriteString("Active players with opponents filled:\n")
+	for idx := range activeArrangerPlayers {
+		ctx.Writer.WriteString(fmt.Sprintf("%+v", activeArrangerPlayers[idx]))
+		ctx.Writer.WriteString("\n")
+	}
+
+	playingPlayers, err := arranger.PickPlayersForCourts(activeArrangerPlayers, event.Courts)
+	if err != nil {
+		RenderError(ctx, http.StatusInternalServerError,
+			fmt.Sprintf("Error when picking players based on number of courts %d: %v", event.Courts, err))
+		return
+	}
+
+	arranger.SortPlayerSliceByScorePriority(playingPlayers)
+	err = arranger.SeparateCompetedPlayersWithinBands(allArrangerPlayers, playingPlayers)
+	if err != nil {
+		RenderError(ctx, http.StatusInternalServerError,
+			fmt.Sprintf("Error when separating competed players within bands %v", err))
+		return
+	}
+
+	ctx.Writer.WriteString("\n\nPlayers clustered by score and separated between competed:\n")
+	for idx := range playingPlayers {
+		ctx.Writer.WriteString(fmt.Sprintf("%+v", playingPlayers[idx]))
+		ctx.Writer.WriteString("\n")
+	}
+
+	arrangerMatches, err := arranger.MakeMatchArrangements(playingPlayers, event.Courts, event.CurrentRound)
+	if err != nil {
+		RenderError(ctx, http.StatusInternalServerError,
+			fmt.Sprintf("Error when making match arrangement based on playing players: %v", err))
+		return
+	}
+	matches := util.FromArrangerMatchArrangement(arrangerMatches, event)
+	ctx.Writer.WriteString("\n\nMatch arrangement:\n")
+	for idx := range matches {
+		ctx.Writer.WriteString(fmt.Sprintf("%+v\n", matches[idx]))
+		ctx.Writer.WriteString(fmt.Sprintf("    %+v\n", matches[idx].Side1))
+		ctx.Writer.WriteString(fmt.Sprintf("    %+v", matches[idx].Side2))
+		ctx.Writer.WriteString("\n")
+	}
+
+	if ctx.Query("proceed") != "1" {
+		return
+	}
+
+	// Clean up existing arrangements
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		var oldMatches []gormmodel.Match
+		ret := tx.Where("eid = ?", event.ID).Where("round = ?", event.CurrentRound).Find(&oldMatches)
+		if ret.Error != nil {
+			return ret.Error
+		}
+
+		for idx := range oldMatches {
+			ret = tx.Delete(&gormmodel.Side{}, oldMatches[idx].Sid1)
+			if ret.Error != nil {
+				return ret.Error
+			}
+			ret = tx.Delete(&gormmodel.Side{}, oldMatches[idx].Sid2)
+			if ret.Error != nil {
+				return ret.Error
+			}
+			ret = tx.Delete(&oldMatches[idx])
+			if ret.Error != nil {
+				return ret.Error
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		log.Printf("Failed when cleaning up old matches/sides %d in round %d: %v", eid, event.CurrentRound, err)
+		RenderError(ctx, http.StatusInternalServerError, "Failed when creating new matches/sides")
+		return
+	}
+
+	err = config.DB.Transaction(func(tx *gorm.DB) error {
+		for idx := range matches {
+			ret = tx.Create(&matches[idx])
+			if ret.Error != nil {
+				return ret.Error
+			}
+
+			matches[idx].Side1.Mid = int(matches[idx].ID)
+			ret = tx.Save(matches[idx].Side1)
+			if ret.Error != nil {
+				return ret.Error
+			}
+			matches[idx].Side2.Mid = int(matches[idx].ID)
+			ret = tx.Save(matches[idx].Side2)
+			if ret.Error != nil {
+				return ret.Error
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("Failed when creating new matches/sides %d in round %d: %v", eid, event.CurrentRound, err)
+		RenderError(ctx, http.StatusInternalServerError, "Failed when creating new matches/sides")
+		return
+	}
+
+	ctx.Writer.WriteString("\n\nMatch arrangement persisted:\n")
+	for idx := range matches {
+		ctx.Writer.WriteString(fmt.Sprintf("%+v\n", matches[idx]))
+		ctx.Writer.WriteString(fmt.Sprintf("    %+v\n", matches[idx].Side1))
+		ctx.Writer.WriteString(fmt.Sprintf("    %+v", matches[idx].Side2))
+		ctx.Writer.WriteString("\n")
+	}
 }

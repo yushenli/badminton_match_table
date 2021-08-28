@@ -2,7 +2,6 @@ package controller
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -10,15 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/yushenli/badminton_match_table/web/lib/config"
 	"github.com/yushenli/badminton_match_table/web/lib/gormmodel"
+	"github.com/yushenli/badminton_match_table/web/lib/util"
 )
-
-type playerWithCounter struct {
-	gormmodel.Player
-	Games int
-	Win   int
-	Loss  int
-	Score float32
-}
 
 // matchTableColStyle returns the css style for the match table columns so that
 // the width adapts the number of courts.
@@ -35,99 +27,7 @@ func matchTableColStyle(courts int) string {
 	return "w-col-3" // width: 25%
 }
 
-func populatePlayers(eid int) ([]playerWithCounter, map[int]*playerWithCounter, error) {
-	var players []playerWithCounter
-	playerMap := make(map[int]*playerWithCounter)
-	ret := config.DB.Where("eid = ?", eid).Find(&players)
-	if ret.Error != nil {
-		log.Printf("Failed to list players under event %d: %v", eid, ret.Error)
-		return nil, nil, ret.Error
-	}
-	for idx := range players {
-		playerMap[int(players[idx].ID)] = &(players[idx])
-		players[idx].Score = players[idx].InitialScore
-	}
-
-	return players, playerMap, nil
-}
-
-func populateSides(eid int, playerMap map[int]*playerWithCounter) ([]gormmodel.Side, map[int]*gormmodel.Side, error) {
-	var sides []gormmodel.Side
-	sideMap := make(map[int]*gormmodel.Side)
-	ret := config.DB.Where("eid = ?", eid).Find(&sides)
-	if ret.Error != nil {
-		log.Printf("Failed to list sides under event %d: %v", eid, ret.Error)
-		return nil, nil, ret.Error
-	}
-	for idx := range sides {
-		sideMap[int(sides[idx].ID)] = &(sides[idx])
-		sides[idx].Player1 = &playerMap[sides[idx].Pid1].Player
-		if sides[idx].Pid2 == nil {
-			continue
-		}
-		if _, ok := playerMap[*sides[idx].Pid2]; ok {
-			sides[idx].Player2 = &playerMap[*sides[idx].Pid2].Player
-		}
-	}
-
-	return sides, sideMap, nil
-}
-
-func populateMatches(eid, currentRound int, sideMap map[int]*gormmodel.Side) ([]gormmodel.Match, [][]*gormmodel.Match, error) {
-	var matches []gormmodel.Match
-	matchesByRound := make([][]*gormmodel.Match, currentRound)
-
-	ret := config.DB.Where("eid = ?", eid).Order("round").Order("court").Find(&matches)
-	if ret.Error != nil {
-		log.Printf("Failed to list matches under event %d: %v", eid, ret.Error)
-		return nil, nil, ret.Error
-	}
-
-	for idx := range matches {
-		roundIdx := matches[idx].Round - 1
-		matchesByRound[roundIdx] = append(matchesByRound[roundIdx], &matches[idx])
-
-		matches[idx].Side1 = sideMap[matches[idx].Sid1]
-		matches[idx].Side2 = sideMap[matches[idx].Sid2]
-	}
-
-	return matches, matchesByRound, nil
-}
-
-func fillPlayerCounter(playerMap map[int]*playerWithCounter, sides []gormmodel.Side) {
-	for _, side := range sides {
-		player, ok := playerMap[side.Pid1]
-		if ok {
-			player.Score += side.Score
-			player.Games++
-			if side.Score > 0 {
-				player.Win++
-			}
-			if side.Score < 0 {
-				player.Loss++
-			}
-		}
-
-		if side.Pid2 == nil {
-			// This means the side object is associated with a single match
-			continue
-		}
-
-		player, ok = playerMap[*side.Pid2]
-		if ok {
-			player.Score += side.Score
-			player.Games++
-			if side.Score > 0 {
-				player.Win++
-			}
-			if side.Score < 0 {
-				player.Loss++
-			}
-		}
-	}
-}
-
-func sortPlayerSlice(players []*playerWithCounter) {
+func sortPlayerSlice(players []*util.PlayerWithCounter) {
 	sort.Slice(players, func(i, j int) bool {
 		p1 := players[i]
 		p2 := players[j]
@@ -146,7 +46,7 @@ func sortPlayerSlice(players []*playerWithCounter) {
 	})
 }
 
-func findUnscheduledPlayers(matches []*gormmodel.Match, players []playerWithCounter) []*gormmodel.Player {
+func findUnscheduledPlayers(matches []*gormmodel.Match, players []util.PlayerWithCounter) []*gormmodel.Player {
 	scheduled := make(map[int]bool)
 	for _, match := range matches {
 		scheduled[match.Side1.Pid1] = true
@@ -190,29 +90,29 @@ func RenderEvent(ctx *gin.Context) {
 	}
 
 	// Fill the Players section
-	players, playerMap, err := populatePlayers(int(event.ID))
+	players, playerMap, err := util.PopulatePlayers(int(event.ID))
 	if err != nil {
 		RenderError(ctx, http.StatusInternalServerError,
 			fmt.Sprintf("Failed to list players under event %d", event.ID))
 		return
 	}
 
-	sides, sideMap, err := populateSides(int(event.ID), playerMap)
+	sides, sideMap, err := util.PopulateSides(int(event.ID), playerMap)
 	if ret.Error != nil {
 		RenderError(ctx, http.StatusInternalServerError,
 			fmt.Sprintf("Failed to list sides under event %d", event.ID))
 		return
 	}
 
-	fillPlayerCounter(playerMap, sides)
-	sortedPlayers := make([]*playerWithCounter, len(players))
+	util.FillPlayerCounter(playerMap, sides)
+	sortedPlayers := make([]*util.PlayerWithCounter, len(players))
 	for idx := range players {
 		sortedPlayers[idx] = &players[idx]
 	}
 	sortPlayerSlice(sortedPlayers)
 
 	// Fill the current round match table and match results
-	_, matchesByRound, err := populateMatches(int(event.ID), event.CurrentRound, sideMap)
+	_, matchesByRound, err := util.PopulateMatches(int(event.ID), event.CurrentRound, sideMap)
 
 	round := event.CurrentRound
 	if ctx.Query("round") != "" {
