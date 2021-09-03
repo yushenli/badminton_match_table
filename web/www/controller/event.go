@@ -132,5 +132,6 @@ func RenderEvent(ctx *gin.Context) {
 		"matchesByRound":     matchesByRound,
 		"matchTableColStyle": matchTableColStyle(len(matchesByRound[round-1])),
 		"unscheduledPlayers": unscheduledPlayers,
+		"hasAdminPrivilege":  util.HasAdminPrivilege(ctx, event),
 	})
 }

@@ -30,6 +30,7 @@ func setupRouter() *gin.Engine {
 	r.GET("/admin/change_break_status", controller.ChangeBreakStatus)
 	r.GET("/admin/complete_round", controller.CompleteRound)
 	r.GET("/admin/schedule", controller.ScheduleCurrentRound)
+	r.GET("/admin/cookie", controller.SetAdminCookie)
 
 	staticFiles := []string{}
 	for _, staticFile := range staticFiles {

@@ -14,6 +14,7 @@ type Event struct {
 	Location     string
 	Courts       int
 	CurrentRound int
+	AdminKey     string
 }
 
 // TableName overrides the default plural-form table name.

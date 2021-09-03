@@ -150,6 +150,13 @@ func CompleteRound(ctx *gin.Context) {
 	if ret.Error != nil {
 		RenderError(ctx, http.StatusInternalServerError,
 			fmt.Sprintf("Failed to locate the event by eid %d: %v", eid, ret.Error))
+		return
+	}
+
+	if !util.HasAdminPrivilege(ctx, event) {
+		RenderError(ctx, http.StatusForbidden,
+			fmt.Sprintf("You do not have admin privilege to event %d", eid))
+		return
 	}
 
 	var matches []gormmodel.Match
@@ -253,6 +260,12 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 	if ret.Error != nil {
 		RenderError(ctx, http.StatusInternalServerError,
 			fmt.Sprintf("Failed to locate the event by eid %d: %v", eid, ret.Error))
+	}
+
+	if !util.HasAdminPrivilege(ctx, event) {
+		RenderError(ctx, http.StatusForbidden,
+			fmt.Sprintf("You do not have admin privilege to event %d", eid))
+		return
 	}
 
 	players, playerMap, err := util.PopulatePlayers(eid)
