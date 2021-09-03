@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yushenli/badminton_match_table/pkg/arranger"
@@ -165,6 +166,25 @@ func CompleteRound(ctx *gin.Context) {
 		log.Printf("Failed to list matches under event %d in round %d: %v", eid, round, ret.Error)
 		RenderError(ctx, http.StatusInternalServerError, "Failed to list matches under event")
 		return
+	}
+	if len(matches) == 0 {
+		RenderError(ctx, http.StatusBadRequest, fmt.Sprintf("Round %d does not have any matches", round))
+		return
+	}
+
+	var latestUpdatedScore *time.Time
+	config.DB.Raw("SELECT MAX(s.`updated_at`) "+
+		"FROM `match` m "+
+		"JOIN `side` s ON m.`sid1` = s.id OR m.`sid2` = s.id "+
+		"WHERE m.eid=? AND m.round=? AND s.`score` != 0",
+		eid, round).Scan(&latestUpdatedScore)
+	if latestUpdatedScore != nil {
+		if ctx.Query("override") != fmt.Sprintf("%d", latestUpdatedScore.Unix()) {
+			RenderError(ctx, http.StatusBadRequest,
+				fmt.Sprintf("The scores for round %d have been already reported, to override pass override=%d",
+					round, latestUpdatedScore.Unix()))
+			return
+		}
 	}
 
 	for _, match := range matches {
