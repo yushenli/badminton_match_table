@@ -97,7 +97,7 @@ func RenderEvent(ctx *gin.Context) {
 		return
 	}
 
-	sides, sideMap, err := util.PopulateSides(int(event.ID), playerMap)
+	sides, sideMap, err := util.PopulateSides(int(event.ID), playerMap, nil)
 	if ret.Error != nil {
 		RenderError(ctx, http.StatusInternalServerError,
 			fmt.Sprintf("Failed to list sides under event %d", event.ID))

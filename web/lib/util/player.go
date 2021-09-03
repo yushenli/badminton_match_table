@@ -6,6 +6,7 @@ import (
 	"github.com/yushenli/badminton_match_table/pkg/model"
 	"github.com/yushenli/badminton_match_table/web/lib/config"
 	"github.com/yushenli/badminton_match_table/web/lib/gormmodel"
+	"gorm.io/gorm"
 )
 
 // PlayerWithCounter is a gormmodel.Player embedded with games counters and a score.
@@ -36,10 +37,16 @@ func PopulatePlayers(eid int) ([]PlayerWithCounter, map[int]*PlayerWithCounter, 
 
 // PopulateSides fetches all sides under an event and put them in a slice as well as a unique-key based map
 // The player pointers inside the side objects will point to the players.
-func PopulateSides(eid int, playerMap map[int]*PlayerWithCounter) ([]gormmodel.Side, map[int]*gormmodel.Side, error) {
+func PopulateSides(eid int, playerMap map[int]*PlayerWithCounter, execludeRound *int) ([]gormmodel.Side, map[int]*gormmodel.Side, error) {
 	var sides []gormmodel.Side
 	sideMap := make(map[int]*gormmodel.Side)
-	ret := config.DB.Where("eid = ?", eid).Find(&sides)
+	var ret *gorm.DB
+	if execludeRound == nil {
+		ret = config.DB.Where("eid = ?", eid).Find(&sides)
+	} else {
+		ret = config.DB.Joins("JOIN `match` ON `match`.sid1 = side.ID OR `match`.sid2 = side.ID").
+			Where("side.eid = ?", eid).Where("round != ?", *execludeRound).Find(&sides)
+	}
 	if ret.Error != nil {
 		log.Printf("Failed to list sides under event %d: %v", eid, ret.Error)
 		return nil, nil, ret.Error

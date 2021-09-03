@@ -254,12 +254,12 @@ func CompleteRound(ctx *gin.Context) {
 }
 
 // ScheduleCurrentRound generates a new match table for the current round.
-// Existing match tables for the same round will be deleted without asking.
 func ScheduleCurrentRound(ctx *gin.Context) {
 	eidStr := ctx.Query("eid")
-	if eidStr == "" {
+	roundStr := ctx.Query("round")
+	if eidStr == "" || roundStr == "" {
 		RenderError(ctx, http.StatusBadRequest,
-			fmt.Sprintf("You must provide the eid parameter: %s", ctx.Request.URL.String()))
+			fmt.Sprintf("You must provide eid and round parameters: %s", ctx.Request.URL.String()))
 		return
 	}
 
@@ -267,6 +267,12 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 	if err != nil {
 		RenderError(ctx, http.StatusBadRequest,
 			fmt.Sprintf("Invalid eid provided: %q", eidStr))
+		return
+	}
+	round, err := strconv.Atoi(roundStr)
+	if err != nil {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("Invalid round provided: %q", roundStr))
 		return
 	}
 
@@ -288,6 +294,23 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 		return
 	}
 
+	if event.CurrentRound != round {
+		RenderError(ctx, http.StatusBadRequest,
+			fmt.Sprintf("You may only generate schedule for the current round %d", event.CurrentRound))
+		return
+	}
+
+	var latestUpdatedScore *time.Time
+	config.DB.Raw("SELECT MAX(`updated_at`)	FROM `match` m 	WHERE m.eid=? AND m.round=?", eid, round).Scan(&latestUpdatedScore)
+	if latestUpdatedScore != nil {
+		if ctx.Query("override") != fmt.Sprintf("%d", latestUpdatedScore.Unix()) {
+			RenderError(ctx, http.StatusBadRequest,
+				fmt.Sprintf("The matches for round %d have been already scheduled, to override pass override=%d",
+					round, latestUpdatedScore.Unix()))
+			return
+		}
+	}
+
 	players, playerMap, err := util.PopulatePlayers(eid)
 	if err != nil {
 		RenderError(ctx, http.StatusInternalServerError,
@@ -295,7 +318,7 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 		return
 	}
 
-	sides, _, err := util.PopulateSides(int(event.ID), playerMap)
+	sides, _, err := util.PopulateSides(int(event.ID), playerMap, &event.CurrentRound)
 	if ret.Error != nil {
 		RenderError(ctx, http.StatusInternalServerError,
 			fmt.Sprintf("Failed to list sides under event %d", eid))
@@ -309,10 +332,12 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 	activeArrangerPlayers := util.ToArrangerPlayers(activePlayers)
 	util.FillArrangerPlayersOpponents(activeArrangerPlayers, sides)
 
-	ctx.Writer.WriteString("Active players with opponents filled:\n")
+	ctx.Writer.WriteString("<html><head><style> body { font-family: Courier New; font-weight: bold; } </style> </head><body>\n")
+
+	ctx.Writer.WriteString("Active players with opponents filled:<br>\n")
 	for idx := range activeArrangerPlayers {
-		ctx.Writer.WriteString(fmt.Sprintf("%+v", activeArrangerPlayers[idx]))
-		ctx.Writer.WriteString("\n")
+		ctx.Writer.WriteString(fmt.Sprintf("%p %+v", activeArrangerPlayers[idx], activeArrangerPlayers[idx]))
+		ctx.Writer.WriteString("<br>\n")
 	}
 
 	playingPlayers, err := arranger.PickPlayersForCourts(activeArrangerPlayers, event.Courts)
@@ -330,10 +355,10 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 		return
 	}
 
-	ctx.Writer.WriteString("\n\nPlayers clustered by score and separated between competed:\n")
+	ctx.Writer.WriteString("<br>\n<br>\nPlayers clustered by score and separated between competed:<br>\n")
 	for idx := range playingPlayers {
-		ctx.Writer.WriteString(fmt.Sprintf("%+v", playingPlayers[idx]))
-		ctx.Writer.WriteString("\n")
+		ctx.Writer.WriteString(fmt.Sprintf("%p %+v", playingPlayers[idx], playingPlayers[idx]))
+		ctx.Writer.WriteString("<br>\n")
 	}
 
 	arrangerMatches, err := arranger.MakeMatchArrangements(playingPlayers, event.Courts, event.CurrentRound)
@@ -343,15 +368,17 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 		return
 	}
 	matches := util.FromArrangerMatchArrangement(arrangerMatches, event)
-	ctx.Writer.WriteString("\n\nMatch arrangement:\n")
+	ctx.Writer.WriteString("<br>\n<br>\nMatch arrangement:<br>\n")
 	for idx := range matches {
-		ctx.Writer.WriteString(fmt.Sprintf("%+v\n", matches[idx]))
-		ctx.Writer.WriteString(fmt.Sprintf("    %+v\n", matches[idx].Side1))
-		ctx.Writer.WriteString(fmt.Sprintf("    %+v", matches[idx].Side2))
-		ctx.Writer.WriteString("\n")
+		ctx.Writer.WriteString(fmt.Sprintf("%+v<br>\n", matches[idx]))
+		ctx.Writer.WriteString(fmt.Sprintf("---- %+v<br>\n", matches[idx].Side1))
+		ctx.Writer.WriteString(fmt.Sprintf("---- %+v", matches[idx].Side2))
+		ctx.Writer.WriteString("<br>\n<br>\n")
 	}
 
 	if ctx.Query("proceed") != "1" {
+		ctx.Writer.WriteString(fmt.Sprintf(
+			"<br>\n<a href=\"%s&proceed=1\">Proceed</a><br>\n", ctx.Request.URL))
 		return
 	}
 
@@ -412,11 +439,11 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 		return
 	}
 
-	ctx.Writer.WriteString("\n\nMatch arrangement persisted:\n")
+	ctx.Writer.WriteString("<br>\n<br>\nMatch arrangement persisted:<br>\n")
 	for idx := range matches {
-		ctx.Writer.WriteString(fmt.Sprintf("%+v\n", matches[idx]))
-		ctx.Writer.WriteString(fmt.Sprintf("    %+v\n", matches[idx].Side1))
-		ctx.Writer.WriteString(fmt.Sprintf("    %+v", matches[idx].Side2))
-		ctx.Writer.WriteString("\n")
+		ctx.Writer.WriteString(fmt.Sprintf("%+v<br>\n", matches[idx]))
+		ctx.Writer.WriteString(fmt.Sprintf("---- %+v<br>\n", matches[idx].Side1))
+		ctx.Writer.WriteString(fmt.Sprintf("---- %+v", matches[idx].Side2))
+		ctx.Writer.WriteString("<br>\n<br>\n")
 	}
 }

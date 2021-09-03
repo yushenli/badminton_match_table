@@ -57,6 +57,8 @@ func PickPlayersForCourts(players model.PlayerSlice, courtCount int) (model.Play
 // MakeMatchArrangements put a processed slice of players into courtCount matches.
 // When not all matches are doubles, which matches will be single and doubles are
 // randomized using the provided seed.
+// After the matches are determined, the order of the matches will be randomized using
+// the provided seed, so not the order of the courts does not represent the ranking.
 func MakeMatchArrangements(players model.PlayerSlice, courtCount int, seed int) (model.MatchArrangement, error) {
 	_, singles, doubles, err := canPlayCount(courtCount, len(players))
 	if err != nil {
@@ -103,6 +105,10 @@ func MakeMatchArrangements(players model.PlayerSlice, courtCount int, seed int) 
 			idx += 2
 		}
 	}
+
+	rand.Shuffle(singles+doubles, func(i, j int) {
+		matches[i], matches[j] = matches[j], matches[i]
+	})
 
 	return matches, nil
 }
