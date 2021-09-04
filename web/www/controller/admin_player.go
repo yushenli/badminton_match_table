@@ -198,17 +198,21 @@ func PlayersSubmit(ctx *gin.Context) {
 		for _, player := range playersToUpdate {
 			ctx.Writer.WriteString(fmt.Sprintf("To be updated: %+v\n", player))
 		}
-		ret := tx.Save(&playersToUpdate)
-		if ret.Error != nil {
-			return ret.Error
+		if len(playersToUpdate) > 0 {
+			ret := tx.Save(&playersToUpdate)
+			if ret.Error != nil {
+				return ret.Error
+			}
 		}
 
 		for idx := range playersToCreate {
 			ctx.Writer.WriteString(fmt.Sprintf("To be created: %+v\n", playersToCreate[idx]))
 		}
-		tx.Create(&playersToCreate)
-		if ret.Error != nil {
-			return ret.Error
+		if len(playersToCreate) > 0 {
+			tx.Create(&playersToCreate)
+			if ret.Error != nil {
+				return ret.Error
+			}
 		}
 
 		return nil
