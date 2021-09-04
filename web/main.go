@@ -25,12 +25,15 @@ func setupRouter() *gin.Engine {
 	r.GET("/", controller.RenderIndex)
 	r.GET("/index.html", controller.RenderIndex)
 	r.GET("/rules.html", controller.RenderRules)
+	r.GET("/event/today", controller.RedirctToToday)
 	r.GET("/event/:key", controller.RenderEvent)
 	r.GET("/admin/change_match_status", controller.ChangeMatchStatus)
 	r.GET("/admin/change_break_status", controller.ChangeBreakStatus)
 	r.GET("/admin/complete_round", controller.CompleteRound)
 	r.GET("/admin/schedule", controller.ScheduleCurrentRound)
 	r.GET("/admin/cookie", controller.SetAdminCookie)
+	r.GET("/admin/players/:eid", controller.PlayersForm)
+	r.POST("/admin/players/:eid", controller.PlayersSubmit)
 
 	staticFiles := []string{}
 	for _, staticFile := range staticFiles {

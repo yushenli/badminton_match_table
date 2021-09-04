@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yushenli/badminton_match_table/web/lib/config"
@@ -134,4 +135,25 @@ func RenderEvent(ctx *gin.Context) {
 		"unscheduledPlayers": unscheduledPlayers,
 		"hasAdminPrivilege":  util.HasAdminPrivilege(ctx, event),
 	})
+}
+
+// RedirctToToday sends HTTP relocation header to the event who has a key of today in the
+// form of YYYYMMDD. If such an event does not exist, it will redirect to the match list
+// on the home page.
+func RedirctToToday(ctx *gin.Context) {
+	if config.DB == nil {
+		RenderError(ctx, http.StatusInternalServerError, "Unable to connect to database. Please contact the admin.")
+		return
+	}
+
+	eventKey := time.Now().Format("20060102")
+	url := fmt.Sprintf("/event/%s", eventKey)
+
+	var event *gormmodel.Event
+	ret := config.DB.Where("`key` = ?", eventKey).First(&event)
+	if ret.Error != nil || event == nil {
+		url = "/#matches"
+	}
+
+	ctx.Redirect(http.StatusTemporaryRedirect, url)
 }
