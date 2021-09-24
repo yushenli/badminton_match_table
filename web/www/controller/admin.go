@@ -334,6 +334,11 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 
 	ctx.Writer.WriteString("<html><head><style> body { font-family: Courier New; font-weight: bold; } </style> </head><body>\n")
 
+	if ctx.Query("proceed") != "1" {
+		ctx.Writer.WriteString(fmt.Sprintf(
+			"<br>\n<a href=\"%s&proceed=1\">Proceed</a><br>\n", ctx.Request.URL))
+	}
+
 	ctx.Writer.WriteString("Active players with opponents filled:<br>\n")
 	for idx := range activeArrangerPlayers {
 		ctx.Writer.WriteString(fmt.Sprintf("%p %+v", activeArrangerPlayers[idx], activeArrangerPlayers[idx]))
@@ -377,8 +382,6 @@ func ScheduleCurrentRound(ctx *gin.Context) {
 	}
 
 	if ctx.Query("proceed") != "1" {
-		ctx.Writer.WriteString(fmt.Sprintf(
-			"<br>\n<a href=\"%s&proceed=1\">Proceed</a><br>\n", ctx.Request.URL))
 		return
 	}
 
