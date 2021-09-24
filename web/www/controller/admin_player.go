@@ -184,6 +184,7 @@ func PlayersSubmit(ctx *gin.Context) {
 				Eid:          eid,
 				Priority:     float32(priority),
 				InitialScore: float32(initialScore),
+				InBreak:      true,
 			})
 		}
 
