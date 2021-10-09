@@ -13,19 +13,16 @@ import (
 func SetAdminCookie(ctx *gin.Context) {
 	cookieStr := ctx.Query("cookie")
 
-	currentCookie, err := ctx.Request.Cookie(util.AdminCookieKey)
-	if err != nil {
-		currentCookie = nil
-	}
+	currentCookie := util.GetAdminCookie(ctx)
 
 	if cookieStr != "" {
 		ctx.SetCookie(util.AdminCookieKey, cookieStr, 86400*7, "/", ctx.Request.Host, false, false)
 	}
 
-	if currentCookie == nil {
+	if currentCookie == "" {
 		ctx.Writer.WriteString("Currently no admin key is set.\n")
 	} else {
-		ctx.Writer.WriteString(fmt.Sprintf("Current admin key: %s\n", currentCookie.Value))
+		ctx.Writer.WriteString(fmt.Sprintf("Current admin key: %s\n", currentCookie))
 	}
 
 	if cookieStr != "" {

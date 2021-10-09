@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/yushenli/badminton_match_table/web/lib/config"
 	"github.com/yushenli/badminton_match_table/web/lib/gormmodel"
+	"github.com/yushenli/badminton_match_table/web/lib/util"
 )
 
 // RenderIndex is the controller for the root page.
@@ -16,6 +17,7 @@ func RenderIndex(ctx *gin.Context) {
 	}
 
 	ctx.HTML(http.StatusOK, "index.html", gin.H{
-		"events": events,
+		"events":      events,
+		"adminCookie": util.GetAdminCookie(ctx),
 	})
 }

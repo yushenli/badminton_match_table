@@ -20,3 +20,14 @@ func HasAdminPrivilege(ctx *gin.Context, event gormmodel.Event) bool {
 
 	return event.AdminKey != "" && currentCookie.Value == event.AdminKey
 }
+
+// GetAdminCookie returns the value of the admin cookie
+func GetAdminCookie(ctx *gin.Context) string {
+	currentCookie, err := ctx.Request.Cookie(AdminCookieKey)
+	adminCookie := ""
+	if currentCookie != nil && err == nil {
+		adminCookie = currentCookie.Value
+	}
+
+	return adminCookie
+}
